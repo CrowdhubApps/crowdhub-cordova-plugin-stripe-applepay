@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<plugin xmlns="http://apache.org/cordova/ns/plugins/1.0" id="crowdhub-cordova-plugin-stripe-applepay" version="0.1.0">
+
+	<name>StripeApplePay</name>
+	<author>Austin Isakson</author>
+
+	<platform name="ios">
+		<config-file target="config.xml" parent="/*">
+			<feature name="StripeApplePay">
+				<param name="ios-package" value="StripeApplePay"/>
+			</feature>
+		</config-file>
+
+		<js-module src="www/StripeApplePay.js" name="StripeApplePay">
+			<clobbers target="StripeApplePay" />
+		</js-module>
+
+		<source-file src="src/ios/StripeApplePay.swift" />
+		<podspec>
+			<pods use-frameworks="true">
+				<pod name="StripeApplePay" modular_headers="true" />
+			</pods>
+		</podspec>
+		<dependency id="cordova-plugin-add-swift-support" version="2.0.2"/>
+	</platform>
+
+</plugin>

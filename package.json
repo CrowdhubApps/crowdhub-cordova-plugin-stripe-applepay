@@ -1,0 +1,17 @@
+{
+	"version": "0.1.0",
+	"name": "crowdhub-cordova-plugin-stripe-applepay",
+	"author": "Austin Isakson",
+	"description": "Integrate ApplePay and return a Stripe token",
+	"license": "MIT",
+	"keywords": [
+		"Health",
+		"HealthKit"
+	],
+	"cordova": {
+		"id": "crowdhub-cordova-plugin-stripe-applepay",
+		"platforms": [
+			"ios"
+		]
+	}
+}
