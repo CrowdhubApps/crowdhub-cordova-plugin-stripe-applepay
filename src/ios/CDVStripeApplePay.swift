@@ -23,12 +23,32 @@ class CDVStripeApplePay : CDVPlugin, PKPaymentAuthorizationControllerDelegate {
     @objc(makePaymentRequest:)
     func makePaymentRequest(command: CDVInvokedUrlCommand) {
         let infoDictionary = Bundle.main.infoDictionary
-
+        
+        #if DEBUG
+        guard let publishableKey = infoDictionary?["StripeTestPublishableKey"] as? String else {
+            print("There is no StripeTestPublishableKey in your plist")
+//            let result = CDVPluginResult(status: CDVCommandStatus_ERROR, messageAs :["There is no StripeTestPublishableKey in your plist"])
+//            self.commandDelegate.send(result, callbackId: command.callbackId)
+            return
+        }
+        #else
+        guard let publishableKey = infoDictionary?["StripeLivePublishableKey"] as? String else {
+            print("There is no StripeTestPublishableKey in your plist")
+//            let result = CDVPluginResult(status: CDVCommandStatus_ERROR, messageAs :["There is no StripeLivePublishableKey in your plist"])
+//            self.commandDelegate.send(result, callbackId: command.callbackId)
+            return
+        }
+        #endif
+        
+        STPAPIClient.shared.publishableKey = publishableKey
+        
         guard let merchantIdentifier = infoDictionary?["MerchantIdentifier"] as? String else {
             let result = CDVPluginResult(status: CDVCommandStatus_ERROR, messageAs :["There is no MerchantIdentifier in your plist."])
             self.commandDelegate.send(result, callbackId: command.callbackId)
             return
         }
+        
+        STPAPIClient.shared.configuration.appleMerchantIdentifier = merchantIdentifier
 
         guard let args = command.arguments[0] as? NSDictionary else {
             let result = CDVPluginResult(status: CDVCommandStatus_ERROR, messageAs :["This call did not contain any arguments."])
@@ -137,27 +157,10 @@ class CDVStripeApplePay : CDVPlugin, PKPaymentAuthorizationControllerDelegate {
     }
     
     internal func paymentAuthorizationController(_ controller: PKPaymentAuthorizationController, didAuthorizePayment payment: PKPayment, handler: @escaping (PKPaymentAuthorizationResult) -> Void) {
-        let infoDictionary = Bundle.main.infoDictionary
-        
-        #if DEBUG
-        guard let publishableKey = infoDictionary?["StripeTestPublishableKey"] as? String else {
-            print("There is no StripeTestPublishableKey in your plist")
-//            let result = CDVPluginResult(status: CDVCommandStatus_ERROR, messageAs :["There is no StripeTestPublishableKey in your plist"])
-//            self.commandDelegate.send(result, callbackId: command.callbackId)
-            return
-        }
-        #else
-        guard let publishableKey = infoDictionary?["StripeLivePublishableKey"] as? String else {
-            print("There is no StripeTestPublishableKey in your plist")
-//            let result = CDVPluginResult(status: CDVCommandStatus_ERROR, messageAs :["There is no StripeLivePublishableKey in your plist"])
-//            self.commandDelegate.send(result, callbackId: command.callbackId)
-            return
-        }
-        #endif
-        STPAPIClient.shared.publishableKey = publishableKey
+
         var stripePaymentMethod: String?
         STPAPIClient.shared.createSource(with: payment, completion: {paymentMethod,error in
-            print(error?.localizedDescription as Any)
+            print(error.debugDescription as Any)
             stripePaymentMethod = paymentMethod?.stripeID
             print(stripePaymentMethod ?? "no payment id created")
         })
