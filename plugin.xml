@@ -6,8 +6,8 @@
 
 	<platform name="ios">
 		<config-file target="config.xml" parent="/*">
-			<feature name="StripeApplePay">
-				<param name="ios-package" value="StripeApplePay"/>
+			<feature name="CDVStripeApplePay">
+				<param name="ios-package" value="CDVStripeApplePay"/>
 			</feature>
 		</config-file>
 
@@ -15,10 +15,10 @@
 			<clobbers target="StripeApplePay" />
 		</js-module>
 
-		<source-file src="src/ios/StripeApplePay.swift" />
+		<source-file src="src/ios/CDVStripeApplePay.swift" />
 		<podspec>
 			<pods use-frameworks="true">
-				<pod name="StripeApplePay" modular_headers="true" />
+				<pod name="Stripe" modular_headers="true" />
 			</pods>
 		</podspec>
 		<dependency id="cordova-plugin-add-swift-support" version="2.0.2"/>
