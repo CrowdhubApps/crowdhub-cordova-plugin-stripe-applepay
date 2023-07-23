@@ -1,8 +1,19 @@
 import Stripe
 import PassKit
 
+struct ShippingMethod {
+    var label: String
+    var amount: Double
+}
+
+struct Item {
+    var label: String
+    var amount: Double
+}
+
 @objc(CDVStripeApplePay)
 class CDVStripeApplePay : CDVPlugin, PKPaymentAuthorizationControllerDelegate {
+    var paymentRequestCallbackId: String?
 
     @objc(canMakePayments:)
     func canMakePayments(command: CDVInvokedUrlCommand) {
@@ -26,16 +37,14 @@ class CDVStripeApplePay : CDVPlugin, PKPaymentAuthorizationControllerDelegate {
         
         #if DEBUG
         guard let publishableKey = infoDictionary?["StripeTestPublishableKey"] as? String else {
-            print("There is no StripeTestPublishableKey in your plist")
-//            let result = CDVPluginResult(status: CDVCommandStatus_ERROR, messageAs :["There is no StripeTestPublishableKey in your plist"])
-//            self.commandDelegate.send(result, callbackId: command.callbackId)
+            let result = CDVPluginResult(status: CDVCommandStatus_ERROR, messageAs :["There is no StripeTestPublishableKey in your plist"])
+            self.commandDelegate.send(result, callbackId: command.callbackId)
             return
         }
         #else
         guard let publishableKey = infoDictionary?["StripeLivePublishableKey"] as? String else {
-            print("There is no StripeTestPublishableKey in your plist")
-//            let result = CDVPluginResult(status: CDVCommandStatus_ERROR, messageAs :["There is no StripeLivePublishableKey in your plist"])
-//            self.commandDelegate.send(result, callbackId: command.callbackId)
+            let result = CDVPluginResult(status: CDVCommandStatus_ERROR, messageAs :["There is no StripeLivePublishableKey in your plist"])
+            self.commandDelegate.send(result, callbackId: command.callbackId)
             return
         }
         #endif
@@ -84,55 +93,23 @@ class CDVStripeApplePay : CDVPlugin, PKPaymentAuthorizationControllerDelegate {
                  shippingTypePK = PKShippingType.shipping
          }
         
-        /*
-         items: [
-             {
-                 label: '3 x Basket Items',
-                 amount: 49.99
-             },
-             {
-                 label: 'Next Day Delivery',
-                 amount: 3.99
-             },
-                     {
-                 label: 'My Fashion Company',
-                 amount: 53.98
-             }
-         ],
-         shippingMethods: [
-             {
-                 identifier: 'NextDay',
-                 label: 'NextDay',
-                 detail: 'Arrives tomorrow by 5pm.',
-                 amount: 3.99
-             },
-             {
-                 identifier: 'Standard',
-                 label: 'Standard',
-                 detail: 'Arrive by Friday.',
-                 amount: 4.99
-             },
-             {
-                 identifier: 'SaturdayDelivery',
-                 label: 'Saturday',
-                 detail: 'Arrive by 5pm this Saturday.',
-                 amount: 6.99
-             }
-         ],
-         currencyCode: 'GBP',
-         countryCode: 'GB'
-         billingAddressRequirement: 'none',
-         shippingAddressRequirement: 'none',
-         shippingType: 'shipping'
-         */
-        
-        let label = "RMR Thing"
-        let amount = 9.99
+        guard let items = args.value(forKey:"items") as? [Item] else {
+            let result = CDVPluginResult(status: CDVCommandStatus_ERROR, messageAs :["This call did not contain any items"])
+            self.commandDelegate.send(result, callbackId: command.callbackId)
+            return
+        }
         
         let paymentRequest = PKPaymentRequest()
-        paymentRequest.paymentSummaryItems = [
-            PKPaymentSummaryItem(label: label, amount: NSDecimalNumber(value: amount)),
-        ]
+        for item in items {
+            paymentRequest.paymentSummaryItems.append(PKPaymentSummaryItem(label: item.label, amount: NSDecimalNumber(value: item.amount)))
+        }
+        
+        if let shippingMethods = args.value(forKey: "shippingMethods") as? [ShippingMethod] {
+            for sm in shippingMethods {
+                paymentRequest.shippingMethods?.append(PKShippingMethod(label: sm.label, amount: NSDecimalNumber(value: sm.amount)))
+            }
+        }
+        
         paymentRequest.merchantIdentifier = merchantIdentifier
         paymentRequest.merchantCapabilities = .capability3DS
         paymentRequest.countryCode = countryCode
@@ -141,34 +118,42 @@ class CDVStripeApplePay : CDVPlugin, PKPaymentAuthorizationControllerDelegate {
         paymentRequest.requiredBillingContactFields = [.name]
         paymentRequest.supportedNetworks = [.amex, .discover, .masterCard, .visa, .maestro]
         paymentRequest.shippingType = shippingTypePK
-        paymentRequest.shippingMethods = []
         
         let paymentController = PKPaymentAuthorizationController(paymentRequest: paymentRequest)
         paymentController.delegate = self
-        paymentController.present(completion: nil)
         
+        paymentRequestCallbackId = command.callbackId
+        paymentController.present(completion: nil)
     }
 
     @objc(completeLastTransaction:)
     func completeLastTransaction(command: CDVInvokedUrlCommand) {
-        let result = CDVPluginResult(status: CDVCommandStatus_OK, messageAs :[])
+        let result = CDVPluginResult(status: CDVCommandStatus_OK, messageAs :["Not implemented"])
         self.commandDelegate.send(result, callbackId: command.callbackId)
         return
     }
     
     internal func paymentAuthorizationController(_ controller: PKPaymentAuthorizationController, didAuthorizePayment payment: PKPayment, handler: @escaping (PKPaymentAuthorizationResult) -> Void) {
-
-        var stripePaymentMethod: String?
-        STPAPIClient.shared.createSource(with: payment, completion: {paymentMethod,error in
-            print(error.debugDescription as Any)
-            stripePaymentMethod = paymentMethod?.stripeID
-            print(stripePaymentMethod ?? "no payment id created")
-        })
+        var pkAuthResult: PKPaymentAuthorizationStatus = .success
+        var pkErrors: [Error] = []
         
-        // Process the payment on your server, and call the completion handler accordingly
-        // Use the payment.token to send payment information securely to your server
-        // After processing, call the completion handler with a result status
-        handler(PKPaymentAuthorizationResult(status: .success, errors: nil))
+        STPAPIClient.shared.createToken(with: payment) { (token, error) in
+            
+            if error != nil {
+                print(error.debugDescription as Any)
+                let result = CDVPluginResult(status: CDVCommandStatus_ERROR, messageAs: error?.localizedDescription)
+                self.commandDelegate.send(result, callbackId: self.paymentRequestCallbackId)
+                pkAuthResult = .failure
+                pkErrors.append(error!)
+            } else {
+                let result = CDVPluginResult(status: CDVCommandStatus_OK, messageAs: ["stripeToken": token?.tokenId as Any])
+                self.commandDelegate.send(result, callbackId: self.paymentRequestCallbackId)
+                pkAuthResult = .success
+            }
+        }
+
+        self.paymentRequestCallbackId = nil
+        handler(PKPaymentAuthorizationResult(status: pkAuthResult, errors: pkErrors))
     }
     
     internal func paymentAuthorizationControllerDidFinish(_ controller: PKPaymentAuthorizationController) {
