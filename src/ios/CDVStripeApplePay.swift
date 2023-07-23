@@ -2,18 +2,19 @@ import Stripe
 import PassKit
 
 struct ShippingMethod {
+    var amount: NSDecimalNumber
     var label: String
-    var amount: Double
 }
 
 struct Item {
+    var amount: NSDecimalNumber
     var label: String
-    var amount: Double
 }
 
 @objc(CDVStripeApplePay)
 class CDVStripeApplePay : CDVPlugin, PKPaymentAuthorizationControllerDelegate {
     var paymentRequestCallbackId: String?
+    var pkItems: [Item]?
 
     @objc(canMakePayments:)
     func canMakePayments(command: CDVInvokedUrlCommand) {
@@ -93,20 +94,21 @@ class CDVStripeApplePay : CDVPlugin, PKPaymentAuthorizationControllerDelegate {
                  shippingTypePK = PKShippingType.shipping
          }
         
-        guard let items = args.value(forKey:"items") as? [Item] else {
-            let result = CDVPluginResult(status: CDVCommandStatus_ERROR, messageAs :["This call did not contain any items"])
+        guard let items = args.value(forKey:"items") as? [NSDictionary] else {
+            print(args.value(forKey:"items"))
+            let result = CDVPluginResult(status: CDVCommandStatus_ERROR, messageAs: ["This call did not contain any items"])
             self.commandDelegate.send(result, callbackId: command.callbackId)
             return
         }
         
         let paymentRequest = PKPaymentRequest()
         for item in items {
-            paymentRequest.paymentSummaryItems.append(PKPaymentSummaryItem(label: item.label, amount: NSDecimalNumber(value: item.amount)))
+            paymentRequest.paymentSummaryItems.append(PKPaymentSummaryItem(label: item["label"] as! String, amount: NSDecimalNumber(decimal: (item["amount"] as! NSNumber).decimalValue)))
         }
         
-        if let shippingMethods = args.value(forKey: "shippingMethods") as? [ShippingMethod] {
+        if let shippingMethods = args.value(forKey: "shippingMethods") as? [NSDictionary] {
             for sm in shippingMethods {
-                paymentRequest.shippingMethods?.append(PKShippingMethod(label: sm.label, amount: NSDecimalNumber(value: sm.amount)))
+                paymentRequest.shippingMethods?.append(PKShippingMethod(label: sm["label"] as! String, amount: NSDecimalNumber(decimal: (sm["amount"] as! NSNumber).decimalValue)))
             }
         }
         
@@ -122,8 +124,10 @@ class CDVStripeApplePay : CDVPlugin, PKPaymentAuthorizationControllerDelegate {
         let paymentController = PKPaymentAuthorizationController(paymentRequest: paymentRequest)
         paymentController.delegate = self
         
-        paymentRequestCallbackId = command.callbackId
-        paymentController.present(completion: nil)
+        self.paymentRequestCallbackId = command.callbackId
+        paymentController.present(completion: {_ in
+            self.pkItems?.removeAll()
+        })
     }
 
     @objc(completeLastTransaction:)
@@ -145,14 +149,16 @@ class CDVStripeApplePay : CDVPlugin, PKPaymentAuthorizationControllerDelegate {
                 self.commandDelegate.send(result, callbackId: self.paymentRequestCallbackId)
                 pkAuthResult = .failure
                 pkErrors.append(error!)
+                self.paymentRequestCallbackId = nil
             } else {
                 let result = CDVPluginResult(status: CDVCommandStatus_OK, messageAs: ["stripeToken": token?.tokenId as Any])
                 self.commandDelegate.send(result, callbackId: self.paymentRequestCallbackId)
                 pkAuthResult = .success
+                self.paymentRequestCallbackId = nil
             }
         }
 
-        self.paymentRequestCallbackId = nil
+        
         handler(PKPaymentAuthorizationResult(status: pkAuthResult, errors: pkErrors))
     }
     
