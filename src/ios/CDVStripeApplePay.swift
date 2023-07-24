@@ -142,7 +142,6 @@ class CDVStripeApplePay : CDVPlugin, PKPaymentAuthorizationControllerDelegate {
         var pkErrors: [Error] = []
         
         STPAPIClient.shared.createToken(with: payment) { (token, error) in
-            
             if error != nil {
                 print(error.debugDescription as Any)
                 let result = CDVPluginResult(status: CDVCommandStatus_ERROR, messageAs: error?.localizedDescription)
@@ -163,7 +162,13 @@ class CDVStripeApplePay : CDVPlugin, PKPaymentAuthorizationControllerDelegate {
     }
     
     internal func paymentAuthorizationControllerDidFinish(_ controller: PKPaymentAuthorizationController) {
-        controller.dismiss(completion: nil)
+        controller.dismiss(completion: {
+            if(self.paymentRequestCallbackId != nil){
+                let result = CDVPluginResult(status: CDVCommandStatus_ERROR, messageAs: "Closed without attempting to create a token.")
+                self.commandDelegate.send(result, callbackId: self.paymentRequestCallbackId)
+                self.paymentRequestCallbackId = nil
+            }
+        })
     }
     
 }
